@@ -1,0 +1,10 @@
+---
+- include_tasks: install-pg.yml
+
+- include_tasks: init-db.yml
+
+- include_tasks: config-files-db.yml
+
+- include_tasks: create-test-db.yml
+
+- include_tasks: query-smoke-test.yml

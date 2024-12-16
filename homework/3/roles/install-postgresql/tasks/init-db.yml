@@ -1,0 +1,13 @@
+---
+- name: Init database PostgreSQL 4 Linux
+  when:
+    - ansible_system == 'Linux'
+  become: true
+  become_user: postgres
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/usr/lib/postgresql/{{ postgresql_latest_version_fact }}/bin"
+    PGDATA: "{{ postgresql_data_directory }}"
+  block:
+    - command: "pg_ctl initdb"
+      args:
+        creates: "{{ postgresql_data_directory }}/PG_VERSION"

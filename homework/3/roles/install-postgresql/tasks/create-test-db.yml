@@ -1,0 +1,39 @@
+---
+- name: Create test database PostgreSQL 4 Linux
+  when:
+    - ansible_system == 'Linux'
+  become: true
+  become_user: postgres
+  vars:
+    student_database: student_db
+    student_user: student
+    student_password: student
+  block:
+    - postgresql_user:
+        name: postgres
+        password: '{{ password_for_default_postgres_user }}'
+    - postgresql_db:
+        db: '{{ student_database }}'
+        encoding: UTF-8
+        state: present
+    - postgresql_user:
+        db: "{{ student_database }}"
+        name: "{{ student_user }}"
+        password: "{{ student_password }}"
+        state: present
+        expires: infinity
+        priv: ALL
+    - postgresql_db:
+        db: '{{ student_database }}'
+        owner: '{{ student_user }}'
+        encoding: UTF-8
+        state: present
+  tags:
+    - linux
+    - ubuntu
+    - db
+    - postgresql
+    - pg
+    - config
+    - create
+    - student

@@ -1,0 +1,56 @@
+---
+
+- name: Get Postgres exporter latest version 4 any Linux
+  when: ansible_system == 'Linux'
+  block:
+    - uri:
+        url: https://api.github.com/repos/prometheus-community/postgres_exporter/tags
+        return_content: yes
+      register: postgres_exporter_latest_version
+      delegate_to: localhost
+
+- name: Install Postgres exporter 4 any Linux
+  when:
+    - ansible_system == 'Linux'
+    - ansible_architecture == 'x86_64'
+  become: true
+  block:
+    - set_fact:
+        postgres_exporter_latest_version_fact:
+          "{{ postgres_exporter_latest_version.json | json_query(query_postgres_exporter_latest_version) }}"
+      vars:
+        query_postgres_exporter_latest_version:
+          "[].name | [0]"
+    - unarchive:
+        # # https://github.com/prometheus-community/postgres_exporter/releases/download/v0.15.0/postgres_exporter-0.15.0.linux-amd64.tar.gz
+        src: "https://github.com/prometheus-community/postgres_exporter/releases/download/{{ postgres_exporter_latest_version_fact }}/postgres_exporter-{{ postgres_exporter_latest_version_fact | replace('v', '') }}.linux-amd64.tar.gz"
+        dest: /usr/local/bin/
+        exclude:
+          - LICENSE
+          - NOTICE
+        remote_src: yes
+        extra_opts:
+          - --strip-components=1
+      notify: restart-postgres-exporter
+    - copy:
+        dest: /etc/systemd/system/postgres_exporter.service
+        content: |
+          [Unit]
+          Description=Prometheus
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=simple
+          User=postgres
+          Group=postgres
+          Environment=DATA_SOURCE_NAME="postgresql://{{ postgresql_exporter_user | default('postgres') }}:{{ postgresql_exporter_password | default('postgres') }}@{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:{{ postgresql_port | default('5432') }}/postgres?sslmode=disable"
+          ExecStart=/usr/local/bin/postgres_exporter --auto-discover-databases
+          Restart=always
+          RestartSec=10s
+          NotifyAccess=all
+
+          [Install]
+          WantedBy=multi-user.target
+        backup: true
+      notify: restart-postgres-exporter

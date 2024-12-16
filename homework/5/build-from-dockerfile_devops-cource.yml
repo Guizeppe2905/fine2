@@ -1,0 +1,39 @@
+---
+# WORK
+  - name: Build Docker image from Dockerfile
+    hosts: all
+    strategy: free
+    serial:
+      - "100%"
+    tasks:
+
+    - name: Build an image and push it to a private repo
+      when: 
+        - ansible_system == 'Linux'
+      # become: true
+      vars:
+        my_local_path_with_code: ../../work5/devops-course/homework/
+        path_to_projects: ~/sh/work5/devops-course/homework
+        gitlab_project: 5
+        project_name: counter-backend
+      block:
+        - file:
+            path: "{{ path_to_projects }}"
+            state: directory
+        - synchronize:
+            src: "{{ my_local_path_with_code }}"
+            dest: "{{ path_to_projects }}"
+            rsync_opts:
+              - "--exclude=.git"
+        # - community.docker.docker_image:
+        #     build:
+        #       path: "{{ path_to_projects }}/{{ gitlab_project }}/{{ project_name }}"
+        #       dockerfile: "{{ item }}"
+        #     name: "{{ project_name }}"
+        #     source: build
+        #     force_source: true
+        #   with_items:
+        #     - Dockerfile.1
+        #     # - Dockerfile.2
+        #     # - Dockerfile.3
+

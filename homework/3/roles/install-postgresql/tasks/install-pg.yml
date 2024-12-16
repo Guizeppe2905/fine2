@@ -1,0 +1,63 @@
+---
+- name: Install PostgreSQL server 4 Ubuntu
+  when:
+    - ansible_distribution == 'Ubuntu'
+    - ansible_architecture == 'x86_64'
+  become: true
+  block:
+    # deps
+    - apt:
+        name:
+          - aptitude
+          - gpg
+          # https://stackoverflow.com/a/56379678
+          - acl
+        state: latest
+        install_recommends: yes
+    # Как видно из register - вычисляем последнюю версию pg.
+    - shell: aptitude search -F %p postgresql- | grep postgresql-[0-9][0-9]$ | sort --version-sort | tail -1 | cut -d '-' -f 2
+      register: postgresql_latest_version
+      changed_when: false
+      when: postgresql_major_version is not defined
+
+    # Какую версию ПГ ставить в дальнейшем.
+    # Если переменная НЕ определена - берём самую последнюю из доступных (работает и с подключенными репами от разрабов тоже). trim на всякий случай.
+    - set_fact:
+        postgresql_latest_version_fact:
+          "{{ postgresql_latest_version.stdout | trim }}"
+      when: postgresql_major_version is not defined
+    # Ставим что в нашей переменной.
+    - set_fact:
+        postgresql_latest_version_fact:
+          "{{ postgresql_major_version }}"
+      when: postgresql_major_version is defined
+
+    - apt:
+        name:
+          - postgresql-{{ postgresql_latest_version_fact }}
+          # Советуют в интернетах поставить, чтобы было меньше геморняка.
+          - postgresql-contrib
+          - libpq-dev
+          # Это чтобы ansible мог дальше рулить базами.
+          - python3-psycopg2
+        state: latest
+        install_recommends: yes
+    - file:
+        path: "{{ postgresql_data_directory }}"
+        owner: postgres
+        group: postgres
+        state: directory
+    - service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      with_items:
+        - postgresql
+        - "postgresql@{{ postgresql_latest_version_fact }}-main.service"
+  tags:
+    - linux
+    - ubuntu
+    - install
+    - db
+    - postgresql
+    - pg

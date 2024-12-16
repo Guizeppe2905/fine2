@@ -1,0 +1,82 @@
+---
+# WORK
+  - name: Install Prometheus
+    hosts: all
+    strategy: free
+    serial:
+      - "100%"
+    vars:
+      www_root_directory: /var/www
+      prometheus_dynamic_hosts_directory: "{{ www_root_directory }}/prometheus/targets"
+    tasks:
+
+    - name: Create Prometheus docker container
+      when:
+        - ansible_system == 'Linux'
+        - ansible_architecture == 'x86_64'
+      become: true
+      block:
+        - file:
+            path: "{{ item }}"
+            state: directory
+          with_items:
+            - "{{ www_root_directory }}/prometheus"
+            - "{{ prometheus_dynamic_hosts_directory }}"
+        - copy:
+            src: "files/docker-compose/prometheus/{{ item }}"
+            dest: "{{ www_root_directory }}/prometheus/{{ item }}"
+          with_items:
+            - docker-compose.yml
+            - prometheus.yml
+          notify:
+            - restart-docker-compose
+        - community.docker.docker_compose_v2:
+            project_src: "{{ www_root_directory }}/prometheus"
+            state: present
+          tags:
+            - docker-compose
+
+    # Это для node_exporter на стандартном порту, если установлен. Доп. проверки писать лениво.
+    # TODO. Рефакторнуть.
+    - name: Config Prometheus simple
+      when:
+        - ansible_system == 'Linux'
+        - ansible_architecture == 'x86_64'
+      become: true
+      vars:
+        # Чтобы Prometheus сам себя мониторил.
+        prometheus_localhost:
+          - targets:
+              - "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:9090"
+        prometheus_hosts_add:
+          - targets:
+              - "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:9100"
+            labels:
+              instance: "{{ ansible_hostname }}"
+          - targets:
+              - "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:9113"
+            labels:
+              instance: "{{ ansible_hostname }}"
+          # Это для audit-svc из https://git.devops-teta.ru/materials/final/audit-svc .
+          - targets:
+              - "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:8080"
+            labels:
+              instance: "{{ ansible_hostname }}"
+      block:
+        - copy:
+            dest: "{{ prometheus_dynamic_hosts_directory }}/localhost.yaml"
+            content: "{{ prometheus_localhost | to_nice_yaml(indent=2) }}"
+        - copy:
+            dest: "{{ prometheus_dynamic_hosts_directory }}/prometheus.yml"
+            content: "{{ prometheus_hosts_add | to_nice_yaml(indent=2) }}"
+
+
+
+    handlers:
+      - name: restart-docker-compose
+        when:
+          - ansible_system == 'Linux'
+        become: true
+        community.docker.docker_compose_v2:
+          project_src: "{{ www_root_directory }}/prometheus"
+          state: restarted

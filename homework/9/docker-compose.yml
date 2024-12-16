@@ -1,0 +1,52 @@
+---
+# version: '3.8'
+
+networks:
+  audit-svc:
+    driver: ${NETWORKS_DRIVER:-bridge}
+
+services:
+
+    nginx:
+      image: nginx:stable-alpine
+      container_name: nginx
+      hostname: nginx
+      user: root
+      ports:
+        - "${SSL_PORT_NUMBER}:${SSL_PORT_NUMBER}"
+        - "8888:8888"
+      volumes:
+        - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+        - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+        - ${PATH_TO_CERTS}:/etc/nginx/ssl
+        - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem
+      command: ["nginx", "-g", "daemon off;"]
+      depends_on:
+        - audit-svc
+      networks:
+        - audit-svc
+
+    audit-svc:
+      image: audit-svc
+      build:
+        context: ./audit-svc
+      container_name: audit-svc
+      hostname: audit-svc
+      # Пашет.
+      # command: sleep 9000
+      # Не пашет.
+      # command: migrate & ; server
+      # Пашет.
+      entrypoint:
+        - /bin/bash
+        - -c
+        - |
+          migrate
+          server
+      volumes:
+        - ./config.yml:${APP_CONFIG}:ro
+      ports:
+        - "8080:8080"
+      tty: true
+      networks:
+        - audit-svc

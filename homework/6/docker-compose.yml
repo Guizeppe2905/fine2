@@ -1,0 +1,49 @@
+---
+# version: '3.8'
+
+# networks:
+#   backend:
+#     driver: ${NETWORKS_DRIVER:-bridge}
+#   frontend:
+#     driver: ${NETWORKS_DRIVER:-bridge}
+
+services:
+
+    nginx:
+      image: nginx:stable-alpine
+      container_name: nginx
+      user: root
+      ports:
+        - "10102:10102"
+      volumes:
+        - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+        - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+        - /etc/letsencrypt/archive/group-1-st-1-2.group-1.devops-teta.ru-0001:/etc/nginx/ssl
+        - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem
+      command: ["nginx", "-g", "daemon off;"]
+      depends_on:
+        - counter-frontend
+        - counter-backend
+      # networks:
+      #   - frontend
+      #   - backend
+
+    counter-frontend:
+      build:
+        context: ./counter-frontend
+      container_name: counter-frontend
+      ports:
+        - "3000:3000"
+      # networks:
+      #   - frontend
+
+    counter-backend:
+      # env_file: .env
+      build:
+        context: ./counter-backend
+      container_name: counter-backend
+      ports:
+        - "8080:8080"
+      # tty: true
+      # networks:
+      #   - backend

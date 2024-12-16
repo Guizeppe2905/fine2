@@ -1,0 +1,22 @@
+---
+version: '3.8'
+
+networks:
+  backend:
+    driver: ${NETWORKS_DRIVER}
+
+# volumes:
+
+services:
+
+    counter-backend:
+      # env_file: .env
+      build:
+        context: ./counter-backend
+        dockerfile: Dockerfile.1
+      ports:
+        - "${WORKSPACE_BROWSERSYNC_HOST_PORT:-3000}:3000"
+        - "${WORKSPACE_BROWSERSYNC_UI_HOST_PORT:-3001}:3001"
+      tty: true
+      networks:
+        - backend

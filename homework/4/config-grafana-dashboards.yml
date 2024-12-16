@@ -1,0 +1,86 @@
+---
+# WORK
+# https://community.grafana.com/t/error-when-connecting-prometheus-datasource/112468/2
+# ReadObject: expect { or , or } or n, but found <, error found in #1 byte of ...|<html lang=|..., bigger context ...|<html lang="en"> <head> <meta charset="UTF-8"|... - There was an error returned querying the Prometheus API.
+# Надо указывать адрес прометея, а не экспортёра прометея.
+
+  - name: Config Grafana dashboards
+    hosts: all
+    strategy: free
+    serial:
+      - "100%"
+    vars:
+      # https://grafana.devops-teta.ru/org/serviceaccounts
+      grafana_api_token_admin_name: sa-test-api-key_vbogdanov-123456789
+      grafana_api_token_admin: glsa_123456789
+      grafana_url: https://grafana.devops-teta.ru
+      group_number: 1
+      prometheus_datasource_postfix: vbogdanov
+    tasks:
+
+    - name: Config Grafana dashboards
+      when:
+        - ansible_system == 'Linux'
+      become: true
+      block:
+        - file:
+            path: files/mtt/tmp
+            state: directory
+        - synchronize:
+            src: files/mtt/tmp/
+            dest: files/mtt/tmp/
+            copy_links: true
+            compress: false
+            rsync_opts:
+              - "--no-motd"
+              # - "--exclude=*SUMS"
+              # - "--exclude=*ntlite*"
+              - "--update"
+              - "--include=*.json"
+              - "--exclude=*"
+
+        # uuid моего датасорса: bcd61cc7-1a8e-4fa6-a1fb-12958c7ac355 можно узнать через -vvv в ансибле.
+        - community.grafana.grafana_datasource:
+            # name: "prometheus-group-{{ group_number }}-vbogdanov-{{ inventory_hostname }}"
+            name: "prometheus-{{ prometheus_datasource_postfix }}"
+            grafana_url: "{{ grafana_url }}"
+            grafana_api_key: "{{ grafana_api_token_admin }}"
+            ds_type: prometheus
+            ds_url: http://{{ inventory_hostname }}:9090
+            state: present
+        - community.grafana.grafana_folder:
+            url: "{{ grafana_url }}"
+            grafana_api_key: "{{ grafana_api_token_admin }}"
+            title: "group-{{ group_number }}"
+            state: present
+        - community.grafana.grafana_dashboard:
+            grafana_url: "{{ grafana_url }}"
+            grafana_api_key: "{{ grafana_api_token_admin }}"
+            folder: "group-{{ group_number }}"
+            # https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/
+            # dashboard_url: https://grafana.com/api/dashboards/13978/revisions/2/download
+            # dashboard_id: 13978
+            # path: files/mtt/tmp/13978_rev2.json
+            path: files/mtt/tmp/node_exporter-dashboard-vbogdanov-work.json
+            commit_message: Updated by ansible
+            # uid: fb26bd99-5ff4-49f7-b432-7f7eacb0aa72
+            # state: absent
+            overwrite: true
+        # Ставит официальный дашборд для nginx exporter'а. Просто выберете свой datasource и переименуйте сам даш.
+        - community.grafana.grafana_dashboard:
+            grafana_url: "{{ grafana_url }}"
+            grafana_api_key: "{{ grafana_api_token_admin }}"
+            folder: "group-{{ group_number }}"
+            # https://grafana.com/grafana/dashboards/12708-nginx/
+            dashboard_url: https://grafana.com/api/dashboards/12708/revisions/1/download
+            # dashboard_id: 12708
+            # uid: d7e6047e-a083-4475-8404-e5d707ce9c12
+            # state: absent
+            overwrite: true
+        - community.grafana.grafana_dashboard:
+            grafana_url: "{{ grafana_url }}"
+            grafana_api_key: "{{ grafana_api_token_admin }}"
+            folder: "group-{{ group_number }}"
+            path: files/mtt/tmp/audit-svc-vbogdanov-v3.json
+            # commit_message: Updated by ansible
+            overwrite: true

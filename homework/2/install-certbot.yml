@@ -1,0 +1,55 @@
+---
+# WORK
+# https://serveradmin.ru/ustanovka-i-nastroyka-nginx-php-fpm-php7-1-na-centos-7/#_ssl_Lets_Encrypt
+  - name: Install Сertbot
+    hosts: all
+    strategy: free
+    serial:
+      - "100%"
+    # roles:
+    #   # https://github.com/don-rumata/ansible-role-install-snap
+    #   - role: don_rumata.ansible_role_install_snap
+    tasks:
+
+    - service_facts:
+      when: ansible_system == 'Linux'
+
+    - name: Install Сertbot 4 Linux
+      when:
+        - ansible_system == 'Linux'
+      become: true
+      block:
+        - package:
+            name:
+              - certbot
+            state: absent
+        - snap:
+            name:
+              - certbot
+            state: present
+            classic: true
+        - service:
+            name: "{{ item }}"
+            state: started
+            enabled: yes
+          with_items:
+            # - certbot.service
+            # - certbot.timer
+            # - snap.certbot.renew.service
+            - snap.certbot.renew.timer
+      tags:
+        - linux
+        - ubuntu
+        - certbot
+        - install
+
+    - name: Install NGINX plugin config 4 certbot 4 Linux
+      when:
+        - ansible_system == 'Linux'
+        - ansible_facts.services['nginx.service'] is defined
+        - ansible_facts.services['nginx.service'].state == 'running'
+      block:
+        - package:
+            name:
+              - python3-certbot-nginx
+            state: latest

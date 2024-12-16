@@ -1,0 +1,84 @@
+---
+- name: Config files PostgreSQL 4 Ubuntu
+  when:
+    - ansible_distribution == 'Ubuntu'
+    - ansible_architecture == 'x86_64'
+  become: true
+  block:
+    # https://dba.stackexchange.com/a/308368
+    - file:
+        path: "{{ postgresql_systemd_override_dir }}"
+        state: directory
+    - copy:
+        dest: "{{ postgresql_systemd_override_dir }}/override.conf"
+        content: |
+          [Service]
+          Environment=PGDATA={{ postgresql_data_directory }}
+          # ExecStart=/usr/lib/postgresql/{{ postgresql_latest_version_fact }}/bin/postgres -D {{ postgresql_data_directory }} -c config_file={{ postgresql_data_directory }}/postgresql.conf
+          User=postgres
+          Group=postgres
+        backup: yes
+      notify: restart-postgresql
+
+    - ini_file:
+        path: "{{ item }}"
+        section: null
+        option: data_directory
+        value: "'{{ postgresql_data_directory }}'"
+        no_extra_spaces: false
+        backup: true
+      with_items:
+        - "{{ postgresql_data_directory }}/postgresql.conf"
+        - "/etc/postgresql/{{ postgresql_latest_version_fact }}/main/postgresql.conf"
+      notify: restart-postgresql
+    - ini_file:
+        path: "{{ item }}"
+        section: null
+        option: listen_addresses
+        value: "'*'"
+        no_extra_spaces: false
+        backup: true
+      with_items:
+        - "{{ postgresql_data_directory }}/postgresql.conf"
+        - "/etc/postgresql/{{ postgresql_latest_version_fact }}/main/postgresql.conf"
+      register: pgsql_config
+      notify: restart-postgresql
+
+    - lineinfile:
+        path: "/etc/postgresql/{{ postgresql_latest_version_fact }}/main/pg_hba.conf"
+        insertafter: '# TYPE'
+        line: "{{ item.host }} {{ item.db }} {{ item.user }} {{ item.address }} {{ item.auth_method }}"
+        state: present
+        backup: true
+      with_items: "{{ postgresql_pg_hba_conf_auth_records }}"
+      register: pgsql_hba_config
+      notify: restart-postgresql
+
+    - lineinfile:
+        path: "{{ postgresql_data_directory }}/pg_hba.conf"
+        insertafter: '# TYPE'
+        line: "{{ item.host }} {{ item.db }} {{ item.user }} {{ item.address }} {{ item.auth_method }}"
+        state: present
+        backup: true
+      with_items: "{{ postgresql_pg_hba_conf_auth_records }}"
+      register: pgsql_hba_config
+      notify: restart-postgresql
+    - service:
+        name: postgresql.service
+        state: restarted
+        daemon-reload: true
+      # Этот вариант пашет, когда поменялся хоть какой-нибудь.
+      when:
+        - (pgsql_config.changed == true)
+          or (pgsql_hba_config.changed == true)
+      # Этот вариант пашет, когда ОБА конфига поменялись.
+      # when:
+      #   - pgsql_config.changed == true
+      #   - pgsql_hba_config.changed == true
+  tags:
+    - linux
+    - ubuntu
+    - db
+    - postgresql
+    - pg
+    - config

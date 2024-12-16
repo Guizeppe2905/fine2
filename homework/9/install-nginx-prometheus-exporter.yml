@@ -1,0 +1,134 @@
+---
+# WORK
+
+  - name: Install NGINX Prometheus Exporter
+
+    hosts: all
+    strategy: free
+    serial:
+      - "100%"
+    vars:
+      nginx_listen_address: 127.0.0.1
+      # https://github.com/nginxinc/nginx-prometheus-exporter?tab=readme-ov-file#running-the-exporter-binary
+      # nginx_port: 8080
+      nginx_port: 8888
+      # TODO. Добавить хелсчек. Эта хрень должна быть прописана в конфиги самого nginx. В оф. доке есть пример.
+      nginx_stub_status_endpoint: stub_status
+      nginx_prometheus_exporter_port: 9113
+    # environment:
+    #   http_proxy: http://proxy.porta.local:3128
+    #   https_proxy: http://proxy.porta.local:3128
+    tasks:
+
+    # - service_facts:
+    #   when: ansible_system == 'Linux'
+
+    - name: Get NGINX Prometheus Exporter latest version 4 any Linux
+      when:
+        - ansible_system == 'Linux'
+        # - ansible_facts.services['mongod.service'] is defined
+        # - ansible_facts.services['mongod.service'].state == 'running'
+      block:
+        - uri:
+            url: https://api.github.com/repos/nginxinc/nginx-prometheus-exporter/releases
+            return_content: true
+          register: nginx_prometheus_exporter_latest_version
+          delegate_to: localhost
+
+    - name: Install mongodb exporter 4 any Linux
+      when:
+        - ansible_system == 'Linux'
+        - ansible_architecture == 'x86_64'
+        # - ansible_facts.services['mongod.service'] is defined
+        # - ansible_facts.services['mongod.service'].state == 'running'
+      become: true
+      block:
+        - set_fact:
+            nginx_prometheus_exporter_latest_version_fact:
+              "{{ nginx_prometheus_exporter_latest_version.json | json_query(query_nginx_prometheus_exporter_latest_version) | replace('v', '') }}"
+          vars:
+            query_nginx_prometheus_exporter_latest_version:
+              "[].name | [0]"
+        # - fail:
+        - unarchive:
+            src: "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v{{ nginx_prometheus_exporter_latest_version_fact }}/nginx-prometheus-exporter_{{ nginx_prometheus_exporter_latest_version_fact | replace('v', '') }}_linux_amd64.tar.gz"
+            dest: /usr/local/bin/
+            exclude:
+              - LICENSE
+              - README.md
+              - completions
+              - manpages
+            remote_src: true
+            # extra_opts:
+            #   - --strip-components=1
+        #   notify: restart-nginx-prometheus-exporter
+        # MTT
+        - copy:
+            dest: /etc/systemd/system/nginx-prometheus-exporter.service
+            content: |
+              Description=NGINX Prometheus Exporter
+              After=syslog.target network.target
+              StartLimitInterval=0
+              StartLimitIntervalSec=0
+
+              [Service]
+              Type=simple
+              # User=nginx-prometheus-exporter
+              # Group=nginx-prometheus-exporter
+
+              ExecStart=/usr/local/bin/nginx-prometheus-exporter \
+                              --web.listen-address=:{{ nginx_prometheus_exporter_port }} \
+                              --web.telemetry-path=/metrics \
+                              --nginx.scrape-uri=http://{{ nginx_listen_address }}:{{ nginx_port }}/{{ nginx_stub_status_endpoint }} \
+                              --log.format=json \
+                              --log.level=warn
+              SyslogIdentifier=nginx-prometheus-exporter
+              Restart=always
+              RestartSec=5
+
+              LockPersonality=true
+              NoNewPrivileges=true
+              MemoryDenyWriteExecute=true
+              PrivateTmp=true
+              ProtectHome=true
+              RemoveIPC=true
+              RestrictSUIDSGID=true
+
+              PrivateUsers=true
+              ProtectControlGroups=true
+              ProtectKernelModules=true
+              ProtectKernelTunables=yes
+              ProtectSystem=strict
+
+              [Install]
+              WantedBy=multi-user.target
+
+            backup: true
+          notify: restart-nginx-prometheus-exporter
+
+    # TODO. Скорее всего на первой установке не отработает, потому что хэндлер к этому времени не отработает.
+    # - name: Check mongodb exporter 4 any Linux
+    #   when:
+    #     - ansible_system == 'Linux'
+    #     - ansible_architecture == 'x86_64'
+    #   become: true
+    #   block:
+    #     - uri:
+    #         url: http://{{ inventory_hostname }}:{{ nginx_prometheus_exporter_port }}/metrics
+    #         return_content: true
+    #       register: nginx_prometheus_exporter_content_status
+    #       delegate_to: localhost
+    #     - fail:
+    #         msg: "Метрики не отдаются."
+    #       when: not ('mongodb_up' in nginx_prometheus_exporter_content_status.content)
+
+    handlers:
+      - name: restart-nginx-prometheus-exporter
+        when:
+          - ansible_system == 'Linux'
+        become: true
+        systemd:
+          name: nginx-prometheus-exporter.service
+          state: restarted
+          enabled: true
+          daemon_reload: true

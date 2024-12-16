@@ -1,0 +1,4 @@
+---
+postgresql_exporter_user: postgres
+postgresql_exporter_password: qazwsxedc
+postgresql_port: 5432

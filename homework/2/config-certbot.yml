@@ -1,0 +1,22 @@
+---
+# WORK
+
+  - name: Config certbot
+    hosts: all
+    strategy: free
+    serial:
+      - "100%"
+    vars:
+      cource_group_number: 1
+      letsencrypt_doamin_registration: "{{ ansible_hostname }}.group-{{ cource_group_number }}.devops-teta.ru"
+      letsencrypt_doamin_port_registration: 10101
+      letsencrypt_email_registration: vbogdanov@exolve.ru
+    tasks:
+
+    - name: Let's Encrypt!
+      when:
+        - ansible_distribution == 'Ubuntu'
+      become: yes
+      command:  certbot certonly --standalone --preferred-challenges http --non-interactive --agree-tos --domains {{ letsencrypt_doamin_registration }} --email {{ letsencrypt_email_registration }} # --http-01-port={{ letsencrypt_doamin_port_registration }}
+      args:
+        creates: /etc/letsencrypt/live/{{ letsencrypt_doamin_registration }}/fullchain.pem

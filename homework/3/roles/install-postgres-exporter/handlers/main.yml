@@ -1,0 +1,10 @@
+---
+- name: restart-postgres-exporter
+  when:
+    - ansible_system == 'Linux'
+  become: true
+  systemd:
+    name: postgres_exporter.service
+    state: restarted
+    enabled: yes
+    daemon_reload: yes

@@ -1,0 +1,74 @@
+FROM python:3.11.6-slim-bookworm AS base
+
+ARG MAINTAINER="vbogdanov <vbogdanov@exolve.ru>"
+ARG DOCKERFILE_VERSION="1.0"
+ARG DESCRIPTION="Homework №5"
+ARG DOCKERFILE_URL="https://git.devops-teta.ru/vbogdanov/homework/-/tree/master/5"
+ARG LICENSE="Apache-2.0"
+
+LABEL maintainer=${MAINTAINER}
+LABEL version=${DOCKERFILE_VERSION}
+LABEL description=${DESCRIPTION}
+LABEL url=${DOCKERFILE_URL}
+LABEL license=${LICENSE}
+
+WORKDIR /build
+
+COPY . .
+
+RUN python -m pip install \
+    --no-color \
+    --no-cache-dir \
+    --disable-pip-version-check \
+    --no-python-version-warning \
+    --no-warn-script-location \
+    --break-system-packages \
+    --progress-bar off \
+    poetry setuptools wheel
+
+RUN mkdir -p ./dist
+
+RUN poetry export \
+    --without-hashes \
+    --format constraints.txt \
+    --output dist/constraints.txt
+
+RUN poetry run \
+    python -m pip wheel \
+    --isolated \
+    --requirement dist/constraints.txt \
+    --wheel-dir dist/vendor
+
+RUN poetry build --format wheel
+
+FROM python:3.11.6-slim-bookworm AS release
+
+COPY --from=base /build/dist /build/dist
+COPY --from=base /build/src /build/src
+COPY --from=base /build/pyproject.toml /build/poetry.lock ./
+
+RUN packages=$(\
+    find 'dist' 'dist/vendor' \
+    -maxdepth 1 \
+    -iname '*.whl' \
+    -exec realpath {} \; \
+    -print0 \
+   | xargs --null) \
+   && python -m pip install \
+    --isolated \
+    --no-index \
+    --no-color \
+    --no-cache-dir \
+    --disable-pip-version-check \
+    --no-python-version-warning \
+    --no-warn-script-location \
+    --no-deps \
+    --break-system-packages \
+    --progress-bar off \
+    ${packages}
+
+ENV PYTHONPATH=/build/src
+
+EXPOSE 8080
+
+ENTRYPOINT [ "python", "-m", "counter_backend" ]

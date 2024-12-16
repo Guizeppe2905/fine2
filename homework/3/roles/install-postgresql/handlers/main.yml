@@ -1,0 +1,9 @@
+---
+- name: restart-postgresql
+  when:
+    - ansible_system == 'Linux'
+  become: true
+  systemd:
+    name: postgresql.service
+    state: restarted
+    daemon-reload: true

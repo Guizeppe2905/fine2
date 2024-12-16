@@ -1,0 +1,55 @@
+---
+# WORK
+# mtt
+
+  - name: Config user 4 deploy
+    hosts: all
+    strategy: free
+    serial:
+      - "100%"
+    vars:
+      # user_create: deploy
+      user_create: sysadmin
+      group_create: "{{ user_create }}"
+      # user_comment: "User 4 deploy over docker"
+      user_comment: "User 4 DevOps course v3.0"
+    tasks:
+
+    - name: Config user "deploy" 4 Linux
+      when: ansible_system == 'Linux'
+      become: true
+      block:
+        - user:
+            name: "{{ user_create }}"
+            groups:
+              # Ниже.
+              # - docker
+              - wheel
+              - sudo
+            append: yes
+            shell: /bin/bash
+            system: no
+            state: present
+            create_home: yes
+            comment: "{{ user_comment }}"
+            expires: -1
+            generate_ssh_key: true
+            # generate_ssh_key: false
+            ssh_key_type: rsa
+            ssh_key_bits: 4096
+            ssh_key_comment: "{{ user_comment }}"
+
+    - service_facts:
+      when: ansible_system == 'Linux'
+
+    - name: Add user to docker group
+      when:
+        - ansible_system == 'Linux'
+        - ansible_facts.services['docker.service'] is defined
+      block:
+        - user:
+            name: "{{ user_create }}"
+            groups:
+              - docker
+            append: yes
+            state: present

@@ -1,0 +1,17 @@
+---
+- name: PostgreSQL query 4 smoke test
+  when:
+    - ansible_system == 'Linux'
+  # become: true
+  block:
+    - postgresql_query:
+        login_host: "{{ postgres_db_login_host }}"
+        login_port: "{{ postgres_db_login_port }}"
+        login_user: "{{ postgres_db_login_user }}"
+        login_password: "{{ postgres_db_login_password }}"
+
+        query: SELECT 1;
+      register: postgres_smoke_test_status
+      delegate_to: localhost
+  tags:
+    - query
